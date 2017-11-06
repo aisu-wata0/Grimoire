@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['grimoire',['Grimoire',['../md_README.html',1,'']]]
+  ['grimoire',['Grimoire',['../index.html',1,'']]]
 ];
