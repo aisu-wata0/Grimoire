@@ -1,4 +1,4 @@
-## Grimoire
+## Grimoire {#mainpage}
 General lib, made to be used as a submodule
 https://rawgit.com/bfs15/Grimoire/doc/doc/annotated.html
 
@@ -9,4 +9,3 @@ To use it Add `-I./Grimoire/include` to the compiler and `#include "varray.hpp"`
 
 To use a project with a submodule, update it with
 `git submodule update --recursive`
-
