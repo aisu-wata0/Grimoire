@@ -9,17 +9,13 @@ namespace gm
 {
 
 
-/**
- * @return returns current clock time in seconds 
- */
+/** @return returns current clock time in seconds */
 double tv_sec(timeval* tp){
 	return ((tp->tv_sec + tp->tv_usec*1.0e-6));
 }
 /**
- * @class Chronometer
- * @file Chronometer.hpp
- * @brief Stores time intervals
- * tick() returns the time since last tick() (or construction)
+ * @brief Stores time intervals	\n
+ * tick() returns the time since last tick() (or construction)	\n
  * use tick() before and tickAverage() after the code you want to measure to
  * get the averageTotal() in the end
  */

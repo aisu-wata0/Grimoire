@@ -8,17 +8,17 @@ namespace gm
 using namespace std;
 
 #define PAD(X) (div_down((X),L1_LINE_DN)*(L1_LINE_DN*(L1_LINE_DN-1))/2)
-// Optm: test switching, the below doesnt work probably
-//#define PAD(X) ((size_t)floor((X)/(double)L1_LINE_DN)*(L1_LINE_DN*(L1_LINE_DN-1))/2)
 
 #define PADDING true
 
 // Non member access functions
 
+/** @return C.at(i,j) */
 template<template<class> class Cont, class Elem>
 Elem& at(Cont<Elem>& C, size_t i, size_t j){
 	return C.at(i,j);
 }
+/** @return M.at(i,j) */
 template<template<class> class Cont, class Elem>
 const Elem& at(Cont<Elem> const& M, size_t i, size_t j){
 	return M.at(i,j);
@@ -32,18 +32,20 @@ class Matrix
 {
 protected:
 	varray<Elem> varr;
-	size_t mSize; // n of elems per row
-	size_t mSizeVec; // n of vec<elem>s per row
+	size_t mSize; //!< n of elems per row
+	size_t mSizeVec; //!< n of vec<elem>s per row
 	
-	size_t mSizeMem; // n of elems per row in memory
-	size_t mSizeVecMem; // n of vec<elem>s per row in memory
-	size_t mPad; // n of elems as padding per row
+	size_t mSizeMem; //!< n of elems per row in memory
+	size_t mSizeVecMem; //!< n of vec<elem>s per row in memory
+	size_t mPad; //!< n of elems as padding per row
 	
-	size_t mEndVec;
+	size_t mEndVec; //!< index where vectorization ends
+	
 	/** @brief Allocates n elems (if existed: frees old varray pointer) */
 	void memAlloc(size_t size){
 		varr.alloc(size*size);
 	}
+	
 public:
 	/** @brief n of elems in a vec */
 	size_t vecN() { return varr.vecN(); }
@@ -57,49 +59,67 @@ public:
 		mPad = mSizeMem - mSize;
 		memAlloc(mSizeMem);
 	}
-	/** @param size of the matrix, total number of lines */
+	
+	/** @brief Constructor
+	 * @param size of the matrix, total number of lines */
 	Matrix(size_t size){
 		alloc(size);
 	}
 	
+	/** @brief empty constructor, call alloc before using */
 	Matrix(){}
 
 	/** @brief n of elems in a row/column */
 	size_t size() const { return mSize; }
+	
 	/** @brief n of elems in a row/column in memory */
 	size_t sizeMem() const { return mSizeMem; }
+	
 	/** @brief n of vec elems in a row/column */
 	size_t sizeVec() const { return mSizeVec; }
+	
 	/** @brief n of vec elems in a row/column in memory*/
 	size_t sizeVecMem() const { return mSizeVecMem; }
+	
 	/** @brief Input the index
 	 * @return the vec index */
 	size_t vecInd(size_t index) const { return index/vecN(); }
+	
 	/** @brief remaining loop start index */
 	size_t remStart() const { return mEndVec; }
+	
 	/** @brief Input vec index
 	 * @return index */
 	size_t remInd(size_t index) const { return index*vecN(); }
+	
 	/** @brief size of the padding in the matrix */
 	size_t pad(){ return mPad; }
 
+	/** @brief returns vec<elem> memory vec index at position */
 	size_t indVecMem(size_t i, size_t j) const {
 		assert(i < mSizeMem && j < mSizeVecMem);
 		return i*mSizeVecMem + j;
 	}
+	
+	/** @brief returns vec<elem> at position */
 	vec<Elem>& atv(size_t i, size_t j) {
 		return varr.atv(indVecMem(i,j));
 	}
+	/** @copydoc atv(size_t,size_t) */
 	const vec<Elem>& atv(size_t i, size_t j) const {
 		return varr.atv(indVecMem(i,j));
 	}
+	
+	/** @brief returns element memory index at position */
 	size_t indMem(size_t i, size_t j) const {
 		assert(i < mSizeMem && j < mSizeMem);
 		return i*mSizeMem + j;
 	}
+	/** @brief returns element at position */
 	Elem& at(size_t i, size_t j){
 		return varr.at(indMem(i,j));
 	}
+	/** @copydoc at(size_t,size_t) */
 	const Elem& at(size_t i, size_t j) const {
 		return varr.at(indMem(i,j));
 	}
@@ -117,23 +137,31 @@ class MatrixColMajor : public Matrix<Elem>
 	using Matrix<Elem>::mSizeVecMem;
 public:
 	
+	/** @copydoc Matrix::indVecMem(size_t, size_t) const */
 	size_t indVecMem(size_t i, size_t j) const {
 		assert(i < mSizeVecMem && j < mSizeMem);
 		return j*mSizeVecMem + i;
 	}
+	
+	/** @copydoc Matrix::atv(size_t, size_t) */
 	vec<Elem>& atv(size_t i, size_t j) {
 		return varr.atv(indVecMem(i,j));
 	}
+	/** @copydoc Matrix::atv(size_t, size_t) */
 	const vec<Elem>& atv(size_t i, size_t j) const {
 		return varr.atv(indVecMem(i,j));
 	}
+	
+	/** @copydoc Matrix::indMem(size_t, size_t) const */
 	size_t indMem(size_t i, size_t j) const {
 		assert(i < mSizeMem && j < mSizeMem);
 		return j*mSizeMem + i;
 	}
+	/** @copydoc Matrix::at(size_t, size_t) */
 	Elem& at(size_t i, size_t j){
 		return varr.at(indMem(i,j));
 	}
+	/** @copydoc Matrix::at(size_t, size_t) */
 	const Elem& at(size_t i, size_t j) const {
 		return varr.at(indMem(i,j));
 	}
@@ -181,7 +209,7 @@ void set(Mat& M, double x){
 		}
 	}
 }
-
+/** @brief prints matrix to cout, with spaces */
 template<class Mat>
 void print(Mat& M){
 	for(size_t i = 0; i < M.size(); i++){
@@ -191,9 +219,7 @@ void print(Mat& M){
 		cout << endl;
 	}
 }
-/**
- * @brief sets I to identity
- */
+/** @brief sets I to identity */
 template<class Mat>
 void identity(Mat& I){
 	for(size_t i = 0; i < I.size(); i++){
