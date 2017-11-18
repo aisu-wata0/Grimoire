@@ -183,6 +183,15 @@ public:
 	 * @return index */
 	size_t remInd(size_t index) const { return index*vecN(); }
 	
+	/** @brief Input the start of a loop
+	 * @return the end of the loop before varray is vectorized */
+	size_t fstEnd(size_t start, size_t end) const {
+		size_t vecStart = roundUpMultiple(start, vecN());
+		if(end < vecStart)
+			return end;
+		return vecStart;
+	}
+	
 	/** @brief size of the padding */
 	size_t pad() const { return mPad; }
 	
