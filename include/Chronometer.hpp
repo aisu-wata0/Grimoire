@@ -19,13 +19,13 @@ double tv_sec(timeval* tp){
  * use tick() before and tickAverage() after the code you want to measure to
  * get the averageTotal() in the end
  */
-template<ptrdiff_t size>
+template<ssize_t size>
 class Chronometer
 {
 public:
 	timeval clock[size];
 	//clock_t n_clock[size];
-	ptrdiff_t c;
+	ssize_t c;
 	double mTotalTime;
 	size_t mAveragedNum;
 	
