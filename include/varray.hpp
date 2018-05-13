@@ -1,247 +1,240 @@
-#ifndef VARRAY_HPP
-#define VARRAY_HPP
+#pragma once
 
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
+#include <memory>
 #include <assert.h>
 
 #include "bytes.h"
+
+#define unroll(v,n) for(size_t v = 0; v < n; ++v)
+#define unroll2D(vi,ni, vj,nj) unroll(vi,ni)unroll(vj,nj)
+#define vec(v) for(size_t v = 0; v < dn; ++v)
+
+#define vectorized_loop(v,_i,min,max,block)	\
+{ 	\
+	size_t _endVI;		\
+	size_t _beginVI = v.loop(min, max, _endVI);		\
+	for (size_t _i = min; _i < _beginVI; ++_i) block		\
+	for (size_t _vi = _beginVI/v.vecN(); _vi < _endVI; ++_vi)		\
+		for(size_t _i = _vi * v.vecN(); _i < _vi * (v.vecN()+1); ++_i) block		\
+	for (size_t _i = _endVI*v.vecN(); _i <= max; ++_i) block		\
+}
 
 namespace gm
 {
 using namespace std;
 
-/** @return True if power of two, only positive numbers */
-template <typename num>
-bool isPowerOfTwo (num n) {
-	return (n > 0) && ((n == 0) || ((n & (n - 1)) == 0));
-}
-
-/** @return the smallest number >= x, multiple of arg 2 */
-template <typename num>
-num roundUpMultiple(num x, num multiple) {
-    assert(multiple);
-    return ((x + multiple - 1) / multiple) * multiple;
-}
-
-/** @brief How many of elem are there in a register of size REG_SZ */
-template<typename elem>
-inline size_t regSize() { return (REG_SZ/sizeof(elem)); }
-
 /**
- * @class vec
+ * @class Vec
  * @brief Vectorized type, performs operations in multiple elements at once
  * using Vector Extensions from gcc, see the compiler doc
- * vec<double> a,b,c; c.v += a.v * b.v;
- * the number of elems in the vec is regSize<elem>() */
+ * Vec<double> a,b,c; c.v += a.v * b.v;
+ * the number of elems in the vec is regSize(elem) */
 template<typename elem>
-struct vec
+class Vec
 {
+public:
 	elem __attribute__ ((vector_size (REG_SZ)))  v; // vectorization of elems
-	
-	inline const elem& operator[] (size_t i) const {
-		assert(i < regSize<elem>() && "Vectorized elem out of register access");
+	// elem v[regSize(elem)];
+
+	const elem& operator[] (size_t i) const {
+		assert(i < regSize(elem) && "Vectorized elem out of register access");
 		return v[i];
 	}
-	inline elem& operator[] (size_t i) {
-		assert(i < regSize<elem>() && "Vectorized elem out of register access");
+	elem& operator[] (size_t i) {
+		assert(i < regSize(elem) && "Vectorized elem out of register access");
 		return v[i];
 	}
 };
 /**
  * @union vecp
- * @brief Union of a vec<elem> and elem pointers	\n
- * Used to store arrays to access vec<elem>s or single elems as needed */
+ * @brief Union of a Vec<elem> and elem pointers	\n
+ * Used to store arrays to access Vec<elem>s or single elems as needed */
 template<typename elem>
-union vecp
+union Vecp
 {
-	vec<elem>*  v;
+	Vec<elem>*  v;
 	elem* p;
+
+	const elem& operator[] (size_t i) const {
+		return p[i];
+	}
+	elem& operator[] (size_t i) {
+		return p[i];
+	}
 };
 
 /**
- * @brief Allocates size*sizeof(elem) and aligns it into a boundary-bit boundary
- * @param ppElement pointer to array (pointer)
- * @param size number of elems in your resulting pointer
- * @param boundary : Power of two, else the behavior is undefined
- * @return The pointer you should free, don't lose it
- */
-template<typename elem>
-void* al_allloc(elem** ppElement, size_t size, size_t boundary){
-	*ppElement = (elem*)malloc((size)*sizeof(elem) + boundary-1);
-	if(*ppElement == NULL){
-		cerr <<"failed to malloc "<< (size)*sizeof(elem)/1024 <<" KiB"<< endl;
-		exit(0);
-	}
-	void* pMem = *ppElement;
-	*ppElement = (elem*)(((uintptr_t)pMem + (boundary-1)) & (uintptr_t)( ~ (boundary-1)));
-	return pMem;
-}
-/**
  * @brief Calculated padded size
  * to align the end to a cache line and avoid cache trashing
+ * will be a multiple of cacheSize(elem) and not a power of two
  */
+template<typename elem>
 size_t calcPadSize(size_t size){
-	// add to make it multiple of L1_LINE_DN (padding)
-	size = roundUpMultiple(size, L1_LINE_DN);
+	// add to make it multiple of cache line (padding)
+	size = upperMultiple(size, cacheSize(elem));
 	// make sure size is not a power of two, avoid cache trashing
-	if(size > L1LINE_N-1 && isPowerOfTwo(size))
-		size += L1_LINE_DN;
+	size_t cacheLinesMem = size/cacheSize(elem);
+	if(cacheLinesMem >= L1LINE_N && isPowerOfTwo(cacheLinesMem))
+		size += cacheSize(elem);
 	return size;
 }
 /**
  * @brief Vectorized array, use this to use Vector Extensions easily	\n
  * Uses dynamic allocated aligned memory. The start of the array is 64 bytes aligned	\n
  * so the vectorization can be used in a loop from 0 to size()/vecN()
- * (== vecInd(size()) == sizeVec()) \n
+ * (== vecInd(size()) == sizeV()) \n
  * the remaining non vectorized elements are looped
- * from sizeVec()*vecN() (== remStart() == remInd(sizeVec())).
+ * from sizeV()*vecN() (== remStart() == remInd(sizeV())).
  * If you must loop from a index that is not multiple of vecN()
  * you have to loop through the first indexes until it reaches a multiple of 4.	\n
  * Example for a generic loop from start to end:	\n
  * ```cpp
- * fstEnd = roundUpMultiple(start, vecN());
- * for(i = start; i < fstEnd; ++i) // fsrt loop // if start%vecN == 0, no loop
- * 		something(V[i]);
- * for(iv = V.vecInd(i); iv < V.vecInd(end); ++iv) // vec loop
- * 		something(V.atv(vi));
- * for(i = V.remInd(vi); i < end; ++i) // remaining loop // if end%vecN == 0, no loop
- * 		something(V.at(i));
+	for (size_t i = min; i < A.beginVI(min); ++i) {
+		X[i] += A[i] * B[i];
+	}
+	for (size_t vi = A.beginVI(min)/A.vecN();
+	vi < A.endVI(max); ++vi) {
+		X.atv(vi).v += A.atv(vi).v * B.atv(vi).v;
+	}
+	for (size_t i = A.endVI(max)*A.vecN(); i <= max; ++i) {
+		X[i] += A[i] * B[i];
+	}
  * ``` */
 template<class elem>
 class varray
 {
 protected:
-	vecp<elem> arr; //!< pointer to elems
-	size_t mSize; //!< n of elems
-	size_t mSizeVec; //!< n of vec<elem>s
-	
-	size_t mSizeMem; //!< n of elem in memory
-	size_t mSizeVecMem; //!< n of vec<elem>s in memory
-	size_t mPad; //!< n of vec<elem>s in memory
-	
-	size_t mEndVec; //!< index where vectorization ends
-	void* mpMem; //!< pointer to be freed
-	
-	/** @brief Allocates n elems (if existed: frees old varray pointer) */
-	void memAlloc(size_t mSizeMem){
-		if(mpMem != NULL) { free(mpMem); }
-		mpMem = al_allloc(&arr.p, mSizeMem, CACHE_LINE_SIZE);
-	}
-	
+	Vecp<elem> arr_; //!< pointer to elems
+
+	size_t size_; //!< n of elems
+	size_t sizeV_; //!< n of Vec<elem>s
+
+	size_t endV_; //!< index where vectorization ends
+
+	std::unique_ptr<Vec<elem>[]> pointer_; //!< used only to store the pointer, no need to free
 public:
 	/** @brief n of elems in a vec */
-	inline size_t vecN() const { return regSize<elem>(); }
-	
-	/** @brief Sets size to n elems (if existed: frees old varray pointer) */
-	void alloc(size_t size){
-		mSize = size;
-		mSizeVec = mSize/vecN();
-		mSizeMem = calcPadSize(mSize);
-		mSizeVecMem = mSizeMem/vecN();
-		mEndVec = Lower_Multiple(mSize, vecN());
-		mPad = mSizeMem - mSize;
-		memAlloc(mSizeMem);
+	size_t vecN() const { return regSize(elem); }
+
+	/** @brief allocates memory for sizeMemV Vec<elem>s */
+	void memAlloc(size_t sizeMemV){
+		/**/
+		pointer_ = std::make_unique<Vec<elem>[]>(sizeMemV);
+		arr_.v = pointer_.get();
+		/**
+		arr_.v = (Vec<elem>*)malloc(sizeMemV*sizeof(Vec<elem>));
+		/**/
 	}
-	
+
+	/** @brief Sets size to n elems, Allocates new memory */
+	void alloc(size_t size){
+		size_ = size;
+		sizeV_ = size_/vecN();
+		endV_ = endVI(size_);
+		
+		size_t sizeVMem = upperMultiple(size, vecN()) / vecN();
+		sizeVMem = calcPadSize<Vec<elem>>(sizeVMem);
+		
+		this->memAlloc(sizeVMem);
+	}
+
 	/** @brief Constructor @param size n of elems in the varray */
 	varray(size_t size) {
-		mpMem = NULL;
 		alloc(size);
 	}
-	/** @brief empty constructor, call alloc before using */
+
+	/** @brief Constructor @param size n of elems in the varray */
 	varray() {
-		mpMem = NULL;
+		alloc(0);
 	}
-	/** @brief destructor, frees array memory */
+
 	~varray(){
-		if(mpMem != NULL) { free(mpMem); }
+		//delete[] arr_.v;
 	}
-	
+
 	/** @brief n of elems */
-	size_t size() const { return mSize; }
-	
-	/** @brief n of elems in memory */
-	size_t sizeMem() const { return mSizeMem; }
-	
+	size_t size() const { return size_; }
+
 	/** @brief n of vec elems */
-	size_t sizeVec() const { return mSizeVec; }
-	
-	/** @brief n of vec elems in memory*/
-	size_t sizeVecMem() const { return mSizeVecMem; }
-	
-	/** @brief Input the index
-	 * @return the vec index */
+	size_t sizeV() const { return sizeV_; }
+
+	/** @brief Input the Index
+	 * @return the VecIndex */
 	size_t vecInd(size_t index) const { return index/vecN(); }
-	
-	/** @brief remaining loop start index */
-	size_t remStart() const { return mEndVec; }
-	
-	/** @brief Input vec index
-	 * @return index */
-	size_t remInd(size_t index) const { return index*vecN(); }
-	
-	/** @brief Input the start of a loop
-	 * @return the end of the loop before varray is vectorized */
-	size_t fstEnd(size_t start, size_t end) const {
-		size_t vecStart = roundUpMultiple(start, vecN());
-		if(end < vecStart)
-			return end;
-		return vecStart;
-	}
-	
-	/** @brief size of the padding */
-	size_t pad() const { return mPad; }
-	
+
 	/** @brief Vectorized access
-	 * @return vec<elem> in the vec index,
+	 * @return Vec<elem> in the vecIndex,
 	 * it will contain elems (i*vecN()) to (i*vecN() + vecN() -1) */
-	inline vec<elem>& atv(size_t i) {
-		assert(i < mSizeVec && "varray vec access out of bounds");
-		return arr.v[i];
+	Vec<elem>& atv(size_t i) {
+		assert(i < sizeV_ && "varray vec access out of bounds");
+		return arr_.v[i];
 	}
 	/** @copydoc atv(size_t) */
-	inline const vec<elem> & atv(size_t i) const {
-		assert(i < mSizeVec && "varray vec access out of bounds");
-		return arr.v[i];
+	const Vec<elem> & atv(size_t i) const {
+		assert(i < sizeV_ && "varray vec access out of bounds");
+		return arr_.v[i];
 	}
-	
-	/** @brief returns element at index*/
-	inline elem& at(size_t i){
-		assert(i < mSize && "varray access out of bounds");
-		return arr.p[i];
+
+	/** @brief returns element at index */
+	elem& at(size_t i){
+		assert(i < size_ && "varray access out of bounds");
+		return arr_[i];
 	}
 	/** @copydoc at(size_t) */
-	inline const elem& at(size_t i) const {
-		assert(i < mSize && "varray access out of bounds");
-		return arr.p[i];
+	const elem& at(size_t i) const {
+		assert(i < size_ && "varray access out of bounds");
+		return arr_[i];
 	}
-	
-	/** @brief begin iterator (pointer) */
-	elem* begin() const { return &arr.p[0]; }
-	/** @brief end iterator (pointer) */
-	elem* end() const { return &arr.p[size()]; }
-	
-	/** @brief begin vec iterator (pointer) */
-	vec<elem>* beginVec() const { return &arr.v[0]; }
-	/** @brief end vec iterator (pointer) */
-	vec<elem>* endVec() const { return &arr.v[sizeVec()]; }
-	
+
+	/** @brief begin iterator */
+	elem* begin() const { return &arr_[0]; }
+	/** @brief end iterator */
+	elem* end() const { return &arr_[size()]; }
+
+	/** @brief begin vectorization index */
+	size_t beginVI(size_t index) const {
+		return upperMultiple(index, vecN());
+	}
+
+	/** @brief begin vectorization iterator */
+	Vec<elem>* beginV() const { return &arr_.v[0]; }
+	/** @brief begin vectorization iterator, the next one from index */
+	size_t beginV(size_t index) const {
+		return &arr_.v[beginVI(index)];
+	}
+
+	/** @brief end vecIndex, last vectorized vecIndex */
+	size_t endVI() const {
+		return sizeV();
+	}
+	/** @brief end vecIndex, last vectorized vecIndex,
+	 * max element possible to vectorize being v[index] */
+	size_t endVI(size_t index) const {
+		return (index+1)/vecN();
+	}
+
+	/** @brief end vecIterator */
+	Vec<elem>* endV() const { return &arr_.v[sizeV()]; }
+	/** @brief end vecIterator 
+	 * max element possible to vectorize being v[index] */
+	Vec<elem>* endV(size_t index) const {
+		return &arr_.v[endVI(index)];
+	}
+
+	size_t loop(size_t min, size_t max, size_t &endVecI) const {
+		endVecI = endVI(max);
+		return beginVI(min);
+	}
+
+
 	/** @copydoc at(size_t) */
 	elem& operator[] (size_t i) {return at(i); }
 	/** @copydoc at(size_t) */
 	const elem& operator[] (size_t i) const { return at(i); }
 };
 
-/** @brief prints vector to cout; elems divided by spaces; no endl or flush */
-template<class Cont>
-void printv(Cont& C){
-	for(size_t i = 0; i < C.size(); ++i)
-		cout << C.at(i) <<" ";
 }
-
-
-}
-#endif
