@@ -1,5 +1,4 @@
-#ifndef IO_HPP
-#define IO_HPP
+#pragma once
 
 #include <stdio.h>
 #include <iostream>
@@ -71,4 +70,3 @@ void printAscii(string filename){
 
 
 }
-#endif
