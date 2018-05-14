@@ -12,6 +12,44 @@
 namespace gm
 {
 
+template<class sstream, class fstream>
+class redirectStreamToFile {
+public:
+	redirectStreamToFile(sstream & stream, std::string filename)
+		: stream_(stream)
+		, oldBuff_(stream_.rdbuf()) //save old buf;
+	{
+		file(filename);
+	}
+
+	redirectStreamToFile(sstream & stream)
+		: stream_(stream)
+		, oldBuff_(stream_.rdbuf()) //save old buf;
+	{
+	}
+
+	void file(std::string filename){
+		fileStream_.open(filename);
+		stream_.rdbuf(fileStream_.rdbuf()); //redirect
+	}
+
+	void close(){
+		fileStream_.close();
+	}
+
+	~redirectStreamToFile(){
+		close();
+		stream_.rdbuf(oldBuff_); // restore
+	}
+
+protected:
+	sstream & stream_;
+	fstream fileStream_;
+	std::streambuf* oldBuff_; //save old buf;
+};
+
+
+
 void clearln(std::istream& in){
 	in.clear();
 	in.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
