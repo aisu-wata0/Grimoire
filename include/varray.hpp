@@ -134,6 +134,9 @@ public:
 	using iterator = elem*;
 	using const_iterator = const elem*;
 
+	using iteratorVec = Vec<elem>*;
+	using const_iteratorVec = const Vec<elem>*;
+
 	/** @brief n of elems in a Vec<> */
 	size_t vecN() const { return regSize(elem); }
 
@@ -246,9 +249,9 @@ public:
 	}
 
 	/** @brief begin iterator */
-	elem* begin() const { return &arr_[0]; }
+	iterator begin() const { return &arr_[0]; }
 	/** @brief end iterator */
-	elem* end() const { return &arr_[size()]; }
+	iterator end() const { return &arr_[size()]; }
 
 	/** @brief begin vectorization index */
 	size_t beginVI(size_t index) const {

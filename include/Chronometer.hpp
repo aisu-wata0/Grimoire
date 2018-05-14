@@ -1,5 +1,4 @@
-#ifndef CHRONOMETER_HPP
-#define CHRONOMETER_HPP
+#pragma once
 
 #include <iostream>
 #include <cstddef>
@@ -85,4 +84,3 @@ Chronometer<TimerHistoryMax> timer;
 
 
 }
-#endif // CHRONOMETER_H
