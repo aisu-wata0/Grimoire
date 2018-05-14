@@ -1,5 +1,4 @@
-#ifndef LOG_HPP
-#define LOG_HPP
+#pragma once
 
 #include <stdio.h>
 #include <iostream>
@@ -10,14 +9,14 @@
 #include <ios>
 #include <algorithm>
 
-#define LogM(LogLvl_, Message_) \
-gm::logger.logLvlMsg(LogLvl_); \
-gm::logger << Message_; gm::logger.flush();
+#define LogM(logLine_, LogLvl_, Message_) \
+logLine_.setMsgLvl(LogLvl_); \
+logLine_ << Message_; logLine_.flush();
 
 #ifdef NDEBUG
-	#define LogDEBUG(_) {}; // do nothing
+	#define LogDEBUG(logLine_, Message_) {}; // do nothing
 #else
-	#define LogDEBUG(Message_) LogM(LogLvl::Debug, Message_);
+	#define LogDEBUG(logLine_, Message_) LogM(logLine_, LogLvl::Debug, Message_);
 #endif
 
 namespace gm
@@ -53,24 +52,67 @@ std::ostream& operator<<(std::ostream& out, const LogLvl value){
 	return out << s;
 }
 
+/**
+ * LogLine is used to filter messages by levels, using gm::LogLvl enum
+ *
+ * example
+ * ```cpp
+   gm::LogLine<std::cout> myLine(gm::LogLvl::Info);
+	// myLine will only log messages with LogLvl of tier Info or higher like Warn
+
+	// "setMsgLvl()" changes LogLvl of this and subsequent messages
+  	myLine.setMsgLvl(gm::LogLvl::Info)
+  	<< "Information message" << std::endl;
+
+	myLine << "this message also has LogLvl::Info" << std::endl;
+
+	// "setMsgLvl()" changed LogLvl subsequent messages to Warn
+  	myLine.setMsgLvl(gm::LogLvl::Warn);
+	myLine << "this message has LogLvl::Warn" << std::endl;
+
+	// "msg()" sends a message of LogLvl given
+  	myLine.msg(gm::LogLvl::Note) << "one time Note without changing Line Msg LogLvl" << std::endl;
+
+	// myLine will only log messages with LogLvl of tier Critical or higher like Fatal
+	myLine.setLvl(LogLvl::Critical);
+
+	//  setMsgLvl was set to Warn beforehand by setMsgLvl()
+	myLine << "another message that has LogLvl::Warn" << std::endl;
+	// so this wont be logged
+
+ * ```
+ * @param out   [description]
+ * @param level [description]
+ */
 template<std::ostream &outStream_>
 class LogLine {
 public:
-	LogLine(std::ostream& out = std::clog, LogLvl level = LogLvl	::Warn)
+	LogLine(LogLvl level = LogLvl::Warn)
 		: logLvl_(level)
-		, logLvlMsg_(level)
+		, setMsgLvl_(level)
 	{
 	}
 
-	void logLvlMsg(LogLvl level){ logLvlMsg_ = level; }
+	LogLine& setMsgLvl(LogLvl level){
+		setMsgLvl_ = level;
+		return *this;
+	}
 
-	void logLvlSet(LogLvl level){ logLvl_ = level; }
+	std::ostream& msg(LogLvl level){
+		if(level <= logLvl_){
+			return outStream_;
+		} else {
+			return nullStream_;
+		}
+	}
+
+	void setLvl(LogLvl level){ logLvl_ = level; }
 
 	void flush() { outStream_ << std::flush; }
 
 	template<class T>
 	std::ostream& operator<<(const T& thing) {
-		if(logLvlMsg_ <= logLvl_){
+		if(setMsgLvl_ <= logLvl_){
 			outStream_ << thing;
 			return outStream_;
 		} else {
@@ -79,7 +121,7 @@ public:
 	}
 	// logger << std::endl;
 	std::ostream& operator<<(std::ostream& (*f)(std::ostream&)) {
-		if(logLvlMsg_ <= logLvl_) {
+		if(setMsgLvl_ <= logLvl_) {
 			f(outStream_);
 			return outStream_;
 		} else {
@@ -91,13 +133,12 @@ public:
 //private:
 	std::ofstream nullStream_;
 	LogLvl logLvl_;
-	LogLvl logLvlMsg_;
+	LogLvl setMsgLvl_;
 	//static LogFilter...
 };
 
 extern LogLine<std::clog> logger;
-LogLine<std::clog> logger(std::clog, LogLvl::Warn);
+LogLine<std::clog> logger(LogLvl::Warn);
 
 
 }
-#endif
