@@ -73,22 +73,13 @@ union Vecp
  * @param boundary : Power of two, else the behavior is undefined
  * @return The pointer you should free, don't lose it
  */
-template<typename elem>
-elem* al_allloc(size_t size, size_t boundary, elem* & pElement){
-	size_t bytes = (size)*sizeof(elem) + boundary-1;
+void* al_allloc(size_t size, size_t boundary, std::unique_ptr<char[]> & pMem){
+	size_t bytes = size + boundary-1;
+	// pMem = std::move(std::make_unique<char[]>(bytes)); // Very slow
+	pMem.reset(new char[bytes]);
 
-//	auto pMem = (elem*)new char[bytes];
-	elem *pMem = (elem*)malloc(bytes);
-	if(pMem == NULL){
-		std::cerr <<"failed to malloc "<< (bytes)/1024 <<" KiB"<< std::endl;
-		throw std::bad_alloc();
-	}
-	// // first aligned address
-	auto tmpPtr = (void*)pMem;
-	pElement = (elem*)std::align(boundary, (size)*sizeof(elem), tmpPtr, bytes);
-//	pElement = (elem*)alignUp((size_t)pMem, boundary);
-
-	return pMem;
+	auto tmpPtr = (void*)pMem.get();
+	return std::align(boundary, size, tmpPtr, bytes);
 }
 /**
  * @brief Calculated padded size
@@ -137,28 +128,19 @@ protected:
 	size_t size_; //!< n of elems
 	size_t sizeV_; //!< n of Vec<elem>s
 
-	struct free_delete
-	{
-	 void operator()(void* x) { free(x); }
-	};
-	std::unique_ptr<Vec<elem>[], free_delete> pointer_; //!< only to store the pointer, no access
+	std::unique_ptr<char[]> pointer_; //!< only to store the pointer, no access
 public:
-	/** @brief n of elems in a vec */
+
+	using iterator = elem*;
+	using const_iterator = const elem*;
+
+	/** @brief n of elems in a Vec<> */
 	size_t vecN() const { return regSize(elem); }
 
 	/** @brief allocates memory for sizeVMem Vec<elem>s */
 	void memAlloc(const size_t & sizeVMem){
-		// size_t ali = sizeof(Vec<elem>);
-		// arr_.v = (Vec<elem>*)aligned_alloc(ali, ali*sizeVMem);
-		// pointer_.reset(arr_.v);
-
-		pointer_.reset((Vec<elem>*)al_allloc(sizeVMem, CACHE_LINE_SIZE, arr_.v));
-
-		std::cout << "memory pointer gotten = " << pointer_.get() << std::endl;
-
-		// pointer made below is not aligned to sizeof(Vec<elem>)
-		// pointer_ = std::make_unique<Vec<elem>[]>(sizeVMem);
-		// arr_.v = pointer_.get();
+		size_t bytes = sizeVMem*sizeof(Vec<double>);
+		arr_.v = (Vec<elem>*)al_allloc(bytes, CACHE_LINE_SIZE, pointer_);
 
 		assert((arr_.v & (sizeof(Vec<elem>) -1)) != 0  && "varray pointer not aligned to sizeof(Vec<elem>) bytes");
 	}
@@ -186,9 +168,47 @@ public:
 		this->memAlloc(sizeVMem());
 	}
 
-	/** @brief Empty Constructor */
-	varray()
+	/** @brief Default destructor */
+	~varray() = default;
+
+	// Copy constructor
+	varray(const varray & other)
+		: size_(other.size_)
+		, sizeV_(other.sizeV_)
 	{
+		this->memAlloc(sizeVMem());
+		std::copy(other.begin(), other.end(), this->begin());
+	}
+
+	// Assignment
+	varray & operator=(const varray & other){
+		varray tmp(other);
+
+		std::swap(*this, tmp);
+
+		return *this;
+	}
+
+	// Move constructor
+	varray(varray && other)
+		: size_(other.size_)
+		, sizeV_(other.sizeV_)
+		, arr_(other.arr_)
+		, pointer_(std::move(other.pointer_))
+	{
+		other.size_ = 0;
+		other.sizeV_ = 0;
+		other.arr_ = nullptr;
+	}
+
+	// Move assignment
+	varray & operator=(varray && other)
+	{
+		varray tmp(std::move(other));
+
+		std::swap(*this, tmp);
+
+		return *this;
 	}
 
 	/** @brief n of elems */

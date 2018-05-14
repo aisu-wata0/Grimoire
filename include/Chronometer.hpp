@@ -1,20 +1,19 @@
 #ifndef CHRONOMETER_HPP
 #define CHRONOMETER_HPP
 
-#include <sys/time.h>
 #include <iostream>
 #include <cstddef>
+#include <chrono>
 
 namespace gm
 {
 
+using Clock = std::chrono::high_resolution_clock;
 
-/** @return returns current clock time in seconds */
-double tv_sec(timeval* tp){
-	return ((tp->tv_sec + tp->tv_usec*1.0e-6));
-}
 /**
  * @brief Stores time intervals	\n
+ * Chronometer<TimerHistoryMax> timer;
+ * timer.timePoints_[] is an array of TimerHistoryMax time_points
  * tick() returns the time since last tick() (or construction)	\n
  * use tick() before and tickAverage() after the code you want to measure to
  * get the averageTotal() in the end
@@ -23,59 +22,61 @@ template<ssize_t size>
 class Chronometer
 {
 public:
-	timeval clock[size];
-	//clock_t n_clock[size];
-	ssize_t c;
-	double mTotalTime;
-	size_t mAveragedNum;
-	
-	Chronometer(){
-		init();
+	Clock::time_point timePoints_[size]; // time_point history: circular array
+	ssize_t c_; // current update index
+
+	double totalTime_; // total time, for averaging
+	size_t averagedNum_; // tickAverage()s taken
+
+	void update(){
+		timePoints_[c_] = Clock::now();
+	}
+
+	Chronometer()
+		: c_(0)
+		, totalTime_(0)
+		, averagedNum_(0)
+	{
+		update();
 	}
 	/** @brief Reset chronometer state*/
 	void init(){
-		gettimeofday(&clock[0], NULL);
-		//n_clock[0] = std::clock();
-		c = 0;
+		c_ = 0;
+		update();
 		initAverage();
-	}
-	/** @return the time since last tick() (or construction)  */
-	double tick(){
-		c = (c + 1) % size;
-		gettimeofday(&clock[c], NULL);
-		//n_clock[c] = std::clock();
-		
-		timeval elapsed_tv;
-		elapsed_tv.tv_sec = clock[c].tv_sec - clock[mod(c-1, size)].tv_sec;
-		elapsed_tv.tv_usec = clock[c].tv_usec - clock[mod(c-1, size)].tv_usec;
-		
-		//*cl = ((double)(n_clock[c] - n_clock[c-1]) / CLOCKS_PER_SEC);
-		return tv_sec(&elapsed_tv);
-	}
-	/** @return starts counting towards tick() */
-	void start(){
-		c = (c + 1) % size;
-		gettimeofday(&clock[c], NULL);
-		//n_clock[c] = std::clock();
 	}
 	/** @brief Reset chronometer averaging*/
 	void initAverage(){
-		mTotalTime = 0;
-		mAveragedNum = 0;
+		totalTime_ = 0;
+		averagedNum_ = 0;
+	}
+	/** @return starts counting towards tick() */
+	void start(){
+		c_ = (c_ + 1) % size;
+		update();
+	}
+	/** @return the time since last tick() (or construction)  */
+	double tick(){
+		start();
+
+		std::chrono::duration<double, std::milli> elapsed = timePoints_[c_] - timePoints_[mod(c_-1, size)];
+		return elapsed.count();
 	}
 	/** @brief Count this tick towards the average*/
 	double tickAverage(){
 		double lastTick = tick();
-		mTotalTime += lastTick;
-		mAveragedNum++;
+
+		totalTime_ += lastTick;
+		++averagedNum_;
+
 		return lastTick;
 	}
 	/** @return Current average from all tickAverage()s
 	 * since construction or initAverage() */
 	double averageTotal(){
-		if(mAveragedNum == 0) return 0;
-		
-		return mTotalTime/(double)mAveragedNum;
+		if(averagedNum_ == 0) return 0;
+
+		return totalTime_/(double)averagedNum_;
 	}
 };
 
