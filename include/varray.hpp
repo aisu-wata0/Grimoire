@@ -2,8 +2,8 @@
 
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <cstdlib>
+#include <stdlib.h>
 #include <iostream>
 #include <memory>
 #include <assert.h>
@@ -13,17 +13,26 @@
 
 #define unroll(v,n) for(size_t v = 0; v < n; ++v)
 #define unroll2D(vi,ni, vj,nj) unroll(vi,ni)unroll(vj,nj)
-#define vec(v) for(size_t v = 0; v < dn; ++v)
+#define vec(varr, _i_) for(size_t _i_ = 0; _i_ < varr.vecN(); ++_i_)
 
-#define vectorized_loop(v,_i,min,max,block)	\
+#define vectorized_loop(v, min,max, _i_, block, _vi_, blockVec)	\
 { 	\
 	size_t _endVI;		\
 	size_t _beginVI = v.loop(min, max, _endVI);		\
-	for (size_t _i = min; _i < _beginVI; ++_i) block		\
-	for (size_t _vi = _beginVI/v.vecN(); _vi < _endVI; ++_vi)		\
-		for(size_t _i = _vi * v.vecN(); _i < _vi * (v.vecN()+1); ++_i) block		\
-	for (size_t _i = _endVI*v.vecN(); _i <= max; ++_i) block		\
+	for (size_t _i_ = min; _i_ < _beginVI; ++_i_) block		\
+	for (size_t _vi_ = _beginVI/v.vecN(); _vi_ < _endVI; ++_vi_){		\
+    blockVec		\
+    }for (size_t _i_ = _endVI*v.vecN(); _i_ <= max; ++_i_) block		\
 }
+// Example of usage, where A,B,X are gm::varray<>s
+// vectorized_loop(A, 0,size-1,
+// 	i,  {
+// 		X[i] += A[i] * B[i];
+// 	},
+// 	vi,  {
+// 		X.atv(vi).v += A.atv(vi).v * B.atv(vi).v;
+// 	}
+// )
 
 namespace gm
 {
@@ -57,7 +66,30 @@ union Vecp
 		return p[i];
 	}
 };
+/**
+ * @brief Allocates size*sizeof(elem) and aligns it into a boundary-bit boundary
+ * @param ppElement pointer to array (pointer)
+ * @param size number of elems in your resulting pointer
+ * @param boundary : Power of two, else the behavior is undefined
+ * @return The pointer you should free, don't lose it
+ */
+template<typename elem>
+elem* al_allloc(size_t size, size_t boundary, elem* & pElement){
+	size_t bytes = (size)*sizeof(elem) + boundary-1;
 
+//	auto pMem = (elem*)new char[bytes];
+	elem *pMem = (elem*)malloc(bytes);
+	if(pMem == NULL){
+		std::cerr <<"failed to malloc "<< (bytes)/1024 <<" KiB"<< std::endl;
+		throw std::bad_alloc();
+	}
+	// // first aligned address
+	auto tmpPtr = (void*)pMem;
+	pElement = (elem*)std::align(boundary, (size)*sizeof(elem), tmpPtr, bytes);
+//	pElement = (elem*)alignUp((size_t)pMem, boundary);
+
+	return pMem;
+}
 /**
  * @brief Calculated padded size
  * to align the end to a cache line and avoid cache trashing
@@ -66,13 +98,14 @@ union Vecp
 template<typename elem>
 size_t calcPadSize(size_t size){
 	// add to make it multiple of cache line (padding)
-	size = upperMultiple(size, cacheSize(elem));
+	size = alignUp(size, cacheSize(elem));
 	// make sure size is not a power of two, avoid cache trashing
 	size_t cacheLinesMem = size/cacheSize(elem);
 	if(cacheLinesMem >= L1LINE_N && isPowerOfTwo(cacheLinesMem))
 		size += cacheSize(elem);
 	return size;
 }
+
 /**
  * @brief Vectorized array, use this to use Vector Extensions easily	\n
  * Uses dynamic allocated aligned memory. The start of the array is 64 bytes aligned	\n
@@ -104,16 +137,24 @@ protected:
 	size_t size_; //!< n of elems
 	size_t sizeV_; //!< n of Vec<elem>s
 
-	std::unique_ptr<Vec<elem>[]> pointer_; //!< used only to store the pointer, no need to free
+	struct free_delete
+	{
+	 void operator()(void* x) { free(x); }
+	};
+	std::unique_ptr<Vec<elem>[], free_delete> pointer_; //!< only to store the pointer, no access
 public:
 	/** @brief n of elems in a vec */
 	size_t vecN() const { return regSize(elem); }
 
 	/** @brief allocates memory for sizeVMem Vec<elem>s */
 	void memAlloc(const size_t & sizeVMem){
-		size_t ali = sizeof(Vec<elem>);
-		arr_.v = (Vec<elem>*)aligned_alloc(ali, ali*sizeVMem);
-		pointer_.reset(arr_.v);
+		// size_t ali = sizeof(Vec<elem>);
+		// arr_.v = (Vec<elem>*)aligned_alloc(ali, ali*sizeVMem);
+		// pointer_.reset(arr_.v);
+
+		pointer_.reset((Vec<elem>*)al_allloc(sizeVMem, CACHE_LINE_SIZE, arr_.v));
+
+		std::cout << "memory pointer gotten = " << pointer_.get() << std::endl;
 
 		// pointer made below is not aligned to sizeof(Vec<elem>)
 		// pointer_ = std::make_unique<Vec<elem>[]>(sizeVMem);
@@ -125,12 +166,12 @@ public:
 	/** @brief calculates how may Vec<>s should be allocated in memory */
 	size_t sizeVMem() const
 	{
-		size_t sizeVMem = upperMultiple(size_, vecN()) / vecN();
+		size_t sizeVMem = alignUp(size_, vecN()) / vecN();
 		return sizeVMem = calcPadSize<Vec<elem>>(sizeVMem);
 	}
 
 	/** @brief Sets size to n elems, Allocates new memory */
-	void alloc(size_t size){
+	void alloc(size_t const & size){
 		size_ = size;
 		sizeV_ = size_/vecN();
 
@@ -191,7 +232,7 @@ public:
 
 	/** @brief begin vectorization index */
 	size_t beginVI(size_t index) const {
-		return upperMultiple(index, vecN());
+		return alignUp(index, vecN());
 	}
 
 	/** @brief begin vectorization iterator */

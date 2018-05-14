@@ -10,80 +10,93 @@
 #include <ios>
 #include <algorithm>
 
-#define LogM(Level_, Message_) \
-logger.msgLevel(Level_); \
-logger << Message_; logger.flush();
+#define LogM(LogLvl_, Message_) \
+gm::logger.logLvlMsg(LogLvl_); \
+gm::logger << Message_; gm::logger.flush();
 
 #ifdef NDEBUG
-	#define LogDEBUG(_) do {} while(false);
+	#define LogDEBUG(_) {}; // do nothing
 #else
-	#define LogDEBUG(Message_) LogM(Level::Debug, Message_);
+	#define LogDEBUG(Message_) LogM(LogLvl::Debug, Message_);
 #endif
 
 namespace gm
 {
 
-//!!! Subtract extra lines from LevelSTART_LINE if an entry takes more than one
-constexpr auto LevelSTART_LINE = __LINE__;
-enum class Level { // Each line has to be an enum, se above
+//!!! Subtract extra lines from LogLvlSTART_LINE if an entry takes more than one
+constexpr auto LogLvlSTART_LINE = __LINE__;
+enum class LogLvl { // Each line has to be an enum, se above
 	Fatal,
 	Critical,
 	Error,
-	Warning,
-	Notification,
-	Information,
+	Warn,
+	Note,
+	Info,
 	Debug,
 };
-constexpr auto LevelMax = __LINE__ - LevelSTART_LINE - 4;
+constexpr auto LogLvlMax = __LINE__ - LogLvlSTART_LINE - 4;
 
-std::ostream& operator<<(std::ostream& out, const Level value){
-	string s;
+std::ostream& operator<<(std::ostream& out, const LogLvl value){
+	std::string s;
 #define CASE_VAL(p) case(p): s = #p; break;
 	switch(value){
-		CASE_VAL(Level::Fatal);
-		CASE_VAL(Level::Critical);
-		CASE_VAL(Level::Error);
-		CASE_VAL(Level::Warning);
-		CASE_VAL(Level::Notification);
-		CASE_VAL(Level::Information);
-		CASE_VAL(Level::Debug);
+		CASE_VAL(LogLvl::Fatal);
+		CASE_VAL(LogLvl::Critical);
+		CASE_VAL(LogLvl::Error);
+		CASE_VAL(LogLvl::Warn);
+		CASE_VAL(LogLvl::Note);
+		CASE_VAL(LogLvl::Info);
+		CASE_VAL(LogLvl::Debug);
 	}
 #undef CASE_VAL
 
 	return out << s;
 }
 
+template<std::ostream &outStream_>
 class LogLine {
 public:
-	LogLine(std::ostream& out = clog, Level level = Level::Warning)
-	:	mOut(out),
-		mLogLevel(level),
-		mCurrentLevel(level){
+	LogLine(std::ostream& out = std::clog, LogLvl level = LogLvl	::Warn)
+		: logLvl_(level)
+		, logLvlMsg_(level)
+	{
 	}
-	
-	template <class T>
-	LogLine& operator<<(const T& thing) {
-		if(mCurrentLevel <= mLogLevel)
-			mOut << thing;
-		return *this;
+
+	void logLvlMsg(LogLvl level){ logLvlMsg_ = level; }
+
+	void logLvlSet(LogLvl level){ logLvl_ = level; }
+
+	void flush() { outStream_ << std::flush; }
+
+	template<class T>
+	std::ostream& operator<<(const T& thing) {
+		if(logLvlMsg_ <= logLvl_){
+			outStream_ << thing;
+			return outStream_;
+		} else {
+			return nullStream_;
+		}
 	}
-	
-	void msgLevel(Level level){ mCurrentLevel = level; }
-	
-	void setLevel(Level level){ mLogLevel = level; }
-	
-	void flush() { mOut << std::flush; }
-	
-private:
-	std::stringstream mStream;
-	std::ostream& mOut;
-	Level mLogLevel;
-	Level mCurrentLevel;
+	// logger << std::endl;
+	std::ostream& operator<<(std::ostream& (*f)(std::ostream&)) {
+		if(logLvlMsg_ <= logLvl_) {
+			f(outStream_);
+			return outStream_;
+		} else {
+			return nullStream_;
+		}
+	}
+
+
+//private:
+	std::ofstream nullStream_;
+	LogLvl logLvl_;
+	LogLvl logLvlMsg_;
 	//static LogFilter...
 };
 
-extern LogLine logger;
-LogLine logger(clog, Level::Warning);
+extern LogLine<std::clog> logger;
+LogLine<std::clog> logger(std::clog, LogLvl::Warn);
 
 
 }

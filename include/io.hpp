@@ -11,17 +11,15 @@
 
 namespace gm
 {
-using namespace std;
 
-
-void clearln(istream& in){
+void clearln(std::istream& in){
 	in.clear();
-	in.ignore(numeric_limits<streamsize>::max(), '\n');
+	in.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 }
 
 template<class type>
-void read(istream& in, type& value,
-	ostream& out = NULL, string error_msg = "")
+void read(std::istream& in, type& value,
+	std::ostream& out = NULL, std::string error_msg = "")
 {
 	while (not(in >> value)) {
 		out << error_msg;
@@ -30,8 +28,8 @@ void read(istream& in, type& value,
 }
 
 template<class type>
-void readln(istream& in, type& value,
-	ostream& out = NULL, string error_msg = "")
+void readln(std::istream& in, type& value,
+	std::ostream& out = NULL, std::string error_msg = "")
 {
 	read(in, value, out, error_msg);
 	clearln(in);
@@ -43,28 +41,28 @@ bool inRange(type value, type min, type max){
 }
 
 template<class type>
-void readInRange(istream& in, type& value, type min, type max,
-	ostream& out = NULL,
-	string err_range_msg = "", string err_valid_msg = "")
+void readInRange(std::istream& in, type& value, type min, type max,
+	std::ostream& out = NULL,
+	std::string err_range_msg = "", std::string err_valid_msg = "")
 {
 	bool valid = false;
 	while(!valid){
 		read(in, value, out, err_valid_msg);
 		if(inRange(value, min, max))
 			valid = true;
-		else out << err_range_msg << endl;
+		else out << err_range_msg << std::endl;
 	}
 }
 
-void readline(istream& in, string& response){
+void readline(std::istream& in, std::string& response){
 	while (getline(in, response) && response.empty());
 }
 
-void printAscii(string filename){
-	ifstream inFile(filename);
-	string buffer;
-	while(getline(inFile, buffer)){
-		cout << buffer << endl;
+void printAscii(std::string filename){
+	std::ifstream inFile(filename);
+	std::string buffer;
+	while(std::getline(inFile, buffer)){
+		std::cout << buffer << std::endl;
 	}
 }
 
