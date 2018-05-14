@@ -249,9 +249,15 @@ public:
 	}
 
 	/** @brief begin iterator */
-	iterator begin() const { return &arr_[0]; }
+	iterator begin() { return &arr_[0]; }
 	/** @brief end iterator */
-	iterator end() const { return &arr_[size()]; }
+	iterator end() { return &arr_[size()]; }
+
+
+	/** @brief begin iterator */
+	const_iterator cbegin() const { return &arr_[0]; }
+	/** @brief end iterator */
+	const_iterator cend() const { return &arr_[size()]; }
 
 	/** @brief begin vectorization index */
 	size_t beginVI(size_t index) const {
