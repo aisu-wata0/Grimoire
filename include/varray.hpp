@@ -3,9 +3,11 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <cstdlib>
 #include <iostream>
 #include <memory>
 #include <assert.h>
+#include <exception>
 
 #include "bytes.h"
 
@@ -25,7 +27,6 @@
 
 namespace gm
 {
-using namespace std;
 
 /**
  * @class Vec
@@ -34,20 +35,10 @@ using namespace std;
  * Vec<double> a,b,c; c.v += a.v * b.v;
  * the number of elems in the vec is regSize(elem) */
 template<typename elem>
-class Vec
+struct alignas(regSize(elem)*sizeof(elem)) Vec
 {
-public:
 	elem __attribute__ ((vector_size (REG_SZ)))  v; // vectorization of elems
 	// elem v[regSize(elem)];
-
-	const elem& operator[] (size_t i) const {
-		assert(i < regSize(elem) && "Vectorized elem out of register access");
-		return v[i];
-	}
-	elem& operator[] (size_t i) {
-		assert(i < regSize(elem) && "Vectorized elem out of register access");
-		return v[i];
-	}
 };
 /**
  * @union vecp
@@ -113,47 +104,50 @@ protected:
 	size_t size_; //!< n of elems
 	size_t sizeV_; //!< n of Vec<elem>s
 
-	size_t endV_; //!< index where vectorization ends
-
 	std::unique_ptr<Vec<elem>[]> pointer_; //!< used only to store the pointer, no need to free
 public:
 	/** @brief n of elems in a vec */
 	size_t vecN() const { return regSize(elem); }
 
-	/** @brief allocates memory for sizeMemV Vec<elem>s */
-	void memAlloc(size_t sizeMemV){
-		/**/
-		pointer_ = std::make_unique<Vec<elem>[]>(sizeMemV);
-		arr_.v = pointer_.get();
-		/**
-		arr_.v = (Vec<elem>*)malloc(sizeMemV*sizeof(Vec<elem>));
-		/**/
+	/** @brief allocates memory for sizeVMem Vec<elem>s */
+	void memAlloc(const size_t & sizeVMem){
+		size_t ali = sizeof(Vec<elem>);
+		arr_.v = (Vec<elem>*)aligned_alloc(ali, ali*sizeVMem);
+		pointer_.reset(arr_.v);
+
+		// pointer made below is not aligned to sizeof(Vec<elem>)
+		// pointer_ = std::make_unique<Vec<elem>[]>(sizeVMem);
+		// arr_.v = pointer_.get();
+
+		assert((arr_.v & (sizeof(Vec<elem>) -1)) != 0  && "varray pointer not aligned to sizeof(Vec<elem>) bytes");
+	}
+
+	/** @brief calculates how may Vec<>s should be allocated in memory */
+	size_t sizeVMem() const
+	{
+		size_t sizeVMem = upperMultiple(size_, vecN()) / vecN();
+		return sizeVMem = calcPadSize<Vec<elem>>(sizeVMem);
 	}
 
 	/** @brief Sets size to n elems, Allocates new memory */
 	void alloc(size_t size){
 		size_ = size;
 		sizeV_ = size_/vecN();
-		endV_ = endVI(size_);
-		
-		size_t sizeVMem = upperMultiple(size, vecN()) / vecN();
-		sizeVMem = calcPadSize<Vec<elem>>(sizeVMem);
-		
-		this->memAlloc(sizeVMem);
+
+		this->memAlloc(sizeVMem());
 	}
 
 	/** @brief Constructor @param size n of elems in the varray */
-	varray(size_t size) {
-		alloc(size);
+	varray(size_t size)
+		: size_(size)
+		, sizeV_(size_/vecN())
+	{
+		this->memAlloc(sizeVMem());
 	}
 
-	/** @brief Constructor @param size n of elems in the varray */
-	varray() {
-		alloc(0);
-	}
-
-	~varray(){
-		//delete[] arr_.v;
+	/** @brief Empty Constructor */
+	varray()
+	{
 	}
 
 	/** @brief n of elems */
@@ -219,7 +213,7 @@ public:
 
 	/** @brief end vecIterator */
 	Vec<elem>* endV() const { return &arr_.v[sizeV()]; }
-	/** @brief end vecIterator 
+	/** @brief end vecIterator
 	 * max element possible to vectorize being v[index] */
 	Vec<elem>* endV(size_t index) const {
 		return &arr_.v[endVI(index)];
