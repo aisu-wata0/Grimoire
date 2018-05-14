@@ -1,9 +1,26 @@
 #ifndef BYTES_H
 #define BYTES_H
 
-#define mod(X,Y) ((((X) % (Y)) + (Y)) % Y)
-#define lowerMultiple(SZ,D) ((SZ) - ((SZ) % D))
-#define upperMultiple(SZ,D) (((SZ) + ((D)-1) ) - ( ((SZ) + ((D)-1) ) % D ))
+#define mod(X,Y) \
+    ((((X) % (Y)) + (Y)) % Y)
+
+#define lowerMultiple(SZ, D) \
+    ((SZ) - ((SZ) % D))
+#define upperMultiple(SZ, D) \
+    (((SZ) + ((D)-1) ) - ( ((SZ) + ((D)-1) ) % D ))
+
+#define alignUp(num, align) \
+    (((num) + ((align) - 1)) & ~((align) - 1))
+
+#define REG_SZ (32) // how many bytes in a register
+
+#define regSize(typename) (REG_SZ/sizeof(typename))
+#define cacheSize(typename) (CACHE_LINE_SIZE/sizeof(typename))
+
+/** @return True if power of two, only positive numbers */
+#define isPowerOfTwo(n)		\
+	(   (n > 0) && ((n == 0) || ((n & (n - 1)) == 0))   )
+
 
 #define CACHE_LINE_SIZE (64) // likwid-topology: Cache line size:	64
 #define L1_LINE_DN (CACHE_LINE_SIZE/sizeof(double)) // how many doubles in a line
@@ -50,12 +67,4 @@
 #define MAX_B2L3 ((long)sqrt(L3_DN/2))
 #define B2L3 (lowerMultiple(MAX_B2L3, B2L2))
 
-#define REG_SZ (32) // how many bytes in a register
-
-#define regSize(typename) (REG_SZ/sizeof(typename))
-#define cacheSize(typename) (CACHE_LINE_SIZE/sizeof(typename))
-
-/** @return True if power of two, only positive numbers */
-#define isPowerOfTwo(n)		\
-	(   (n > 0) && ((n == 0) || ((n & (n - 1)) == 0))   )
 #endif

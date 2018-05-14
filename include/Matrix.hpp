@@ -5,7 +5,6 @@
 
 namespace gm
 {
-using namespace std;
 
 #define PAD(X) (div_down((X),L1_LINE_DN)*(L1_LINE_DN*(L1_LINE_DN-1))/2)
 
