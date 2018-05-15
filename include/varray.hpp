@@ -15,7 +15,7 @@
 #define unroll2D(vi,ni, vj,nj) unroll(vi,ni)unroll(vj,nj)
 #define vec(varr, _i_) for(size_t _i_ = 0; _i_ < varr.vecN(); ++_i_)
 
-#define vectorized_loop(v, min,max, _i_, block, _vi_, blockVec)	\
+#define gm_vectorized_loop_(v, min,max, _i_, block, _vi_, blockVec)	\
 { 	\
 	size_t _endVI;		\
 	size_t _beginVI = v.loop(min, max, _endVI);		\
@@ -25,12 +25,12 @@
     }for (size_t _i_ = _endVI*v.vecN(); _i_ <= max; ++_i_) block		\
 }
 // Example of usage, where A,B,X are gm::varray<>s
-// vectorized_loop(A, 0,size-1,
+// gm_vectorized_loop_(A, 0,size-1,
 // 	i,  {
 // 		X[i] += A[i] * B[i];
 // 	},
 // 	vi,  {
-// 		X.atv(vi).v += A.atv(vi).v * B.atv(vi).v;
+// 		X.atV(vi).v += A.atV(vi).v * B.atV(vi).v;
 // 	}
 // )
 
@@ -41,20 +41,25 @@ namespace gm
  * @class Vec
  * @brief Vectorized type, performs operations in multiple elements at once
  * using Vector Extensions from gcc, see the compiler doc
- * Vec<double> a,b,c; c.v += a.v * b.v;
- * the number of elems in the vec is regSize(elem) */
-template<typename elem>
-struct alignas(regSize(elem)*sizeof(elem)) Vec
-{
-	elem __attribute__ ((vector_size (REG_SZ)))  v; // vectorization of elems
-	// elem v[regSize(elem)];
-};
+ *
+ * ```cpp
+	Vec<double> a,b,c;
+	c += a * b; // 4 doubles will be multiplied in one instruction
+	// can be individualy be accessed like Vec<> is an array
+	for(int i = 0; i < VecN(double); ++i)
+		std::cout << c[i] << " ";
+	std::cout << std::endl;
+ * ```
+ * the number of elems in the Vec is regSize(elem) */
+template <typename T>
+using Vec __attribute__ ((vector_size (REG_SZ))) = T;
+
 /**
  * @union vecp
  * @brief Union of a Vec<elem> and elem pointers	\n
  * Used to store arrays to access Vec<elem>s or single elems as needed */
 template<typename elem>
-union Vecp
+union pVec
 {
 	Vec<elem>*  v;
 	elem* p;
@@ -113,7 +118,7 @@ size_t calcPadSize(size_t size){
 	}
 	for (size_t vi = A.beginVI(min)/A.vecN();
 	vi < A.endVI(max); ++vi) {
-		X.atv(vi).v += A.atv(vi).v * B.atv(vi).v;
+		X.atV(vi).v += A.atV(vi).v * B.atV(vi).v;
 	}
 	for (size_t i = A.endVI(max)*A.vecN(); i <= max; ++i) {
 		X[i] += A[i] * B[i];
@@ -123,7 +128,7 @@ template<class elem>
 class varray
 {
 protected:
-	Vecp<elem> arr_; //!< pointer to elems
+	pVec<elem> arr_; //!< pointer to elems
 
 	size_t size_; //!< n of elems
 	size_t sizeV_; //!< n of Vec<elem>s
@@ -142,7 +147,7 @@ public:
 
 	/** @brief allocates memory for sizeVMem Vec<elem>s */
 	void memAlloc(const size_t & sizeVMem){
-		size_t bytes = sizeVMem*sizeof(Vec<double>);
+		size_t bytes = sizeVMem*sizeof(Vec<elem>);
 		arr_.v = (Vec<elem>*)al_allloc(bytes, CACHE_LINE_SIZE, pointer_);
 
 		assert((arr_.v & (sizeof(Vec<elem>) -1)) != 0  && "varray pointer not aligned to sizeof(Vec<elem>) bytes");
@@ -227,12 +232,12 @@ public:
 	/** @brief Vectorized access
 	 * @return Vec<elem> in the vecIndex,
 	 * it will contain elems (i*vecN()) to (i*vecN() + vecN() -1) */
-	Vec<elem>& atv(size_t i) {
+	Vec<elem>& atV(size_t i) {
 		assert(i < sizeV_ && "varray vec access out of bounds");
 		return arr_.v[i];
 	}
-	/** @copydoc atv(size_t) */
-	const Vec<elem> & atv(size_t i) const {
+	/** @copydoc atV(size_t) */
+	const Vec<elem> & atV(size_t i) const {
 		assert(i < sizeV_ && "varray vec access out of bounds");
 		return arr_.v[i];
 	}
