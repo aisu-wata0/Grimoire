@@ -3,6 +3,7 @@
 #include <iostream>
 #include <cstddef>
 #include <chrono>
+#include "bytes.h"
 
 namespace gm
 {
@@ -58,7 +59,7 @@ public:
 	double tick(){
 		start();
 
-		std::chrono::duration<double, std::milli> elapsed = timePoints_[c_] - timePoints_[mod(c_-1, size)];
+		std::chrono::duration<double, std::milli> elapsed = timePoints_[c_] - timePoints_[mod((c_-1), (size))];
 		return elapsed.count();
 	}
 	/** @brief Count this tick towards the average*/
