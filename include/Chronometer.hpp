@@ -3,6 +3,9 @@
 #include <iostream>
 #include <cstddef>
 #include <chrono>
+#include <sys/types.h>
+#include <unistd.h>
+
 #include "bytes.h"
 
 namespace gm
