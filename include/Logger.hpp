@@ -84,14 +84,16 @@ std::ostream& operator<<(std::ostream& out, const LogLvl value){
  * @param out   [description]
  * @param level [description]
  */
-template<std::ostream &outStream_>
 class LogLine {
 public:
-	LogLine(LogLvl level = LogLvl::Warn)
-		: logLvl_(level)
-		, setMsgLvl_(level)
+  LogLine(std::ostream &outStream, LogLvl level = LogLvl::Warn)
+		: outStream_(outStream), logLvl_(level), setMsgLvl_(level)
 	{
 	}
+
+	void setLvl(LogLvl level){ logLvl_ = level; }
+
+	void flush() { outStream_ << std::flush; }
 
 	LogLine& setMsgLvl(LogLvl level){
 		setMsgLvl_ = level;
@@ -105,10 +107,6 @@ public:
 			return nullStream_;
 		}
 	}
-
-	void setLvl(LogLvl level){ logLvl_ = level; }
-
-	void flush() { outStream_ << std::flush; }
 
 	template<class T>
 	std::ostream& operator<<(const T& thing) {
@@ -131,14 +129,14 @@ public:
 
 
 //private:
+	std::ostream &outStream_;
 	std::ofstream nullStream_;
 	LogLvl logLvl_;
 	LogLvl setMsgLvl_;
 	//static LogFilter...
 };
 
-extern LogLine<std::clog> logger;
-LogLine<std::clog> logger(LogLvl::Warn);
-
+extern LogLine logger;
+LogLine logger(std::clog, LogLvl::Warn);
 
 }
