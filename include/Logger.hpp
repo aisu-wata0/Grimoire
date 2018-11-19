@@ -26,28 +26,6 @@ enum class LogLvl
 };
 constexpr auto LogLvlMax = __LINE__ - LogLvlSTART_LINE - 4;
 
-std::ostream &operator<<(std::ostream &out, const LogLvl value)
-{
-	std::string s;
-#define CASE_VAL(p) \
-	case (p):        \
-		s = #p;       \
-		break;
-	switch (value)
-	{
-		CASE_VAL(LogLvl::Fatal);
-		CASE_VAL(LogLvl::Critical);
-		CASE_VAL(LogLvl::Error);
-		CASE_VAL(LogLvl::Warn);
-		CASE_VAL(LogLvl::Note);
-		CASE_VAL(LogLvl::Info);
-		CASE_VAL(LogLvl::Debug);
-	}
-#undef CASE_VAL
-
-	return out << s;
-}
-
 /**
  * LogLine is used to filter messages by levels, using gm::LogLvl enum
  *
@@ -71,7 +49,7 @@ std::ostream &operator<<(std::ostream &out, const LogLvl value)
  * @tparam logLvl_ Lvl of the LogLine
  * @param out   ostream to output logs
  */
-template <LogLvl logLvl_>
+template<LogLvl logLvl_>
 class LogLine
 {
  public:
@@ -84,28 +62,27 @@ class LogLine
 
 	void flush() { outStream_ << std::flush; }
 
-	LogLine &msg(const LogLvl &level){
+	LogLine<logLvl_> & msg(const LogLvl &level) {
 		setMsgLvl_ = level;
 		return *this;
 	}
 
 	template <class T>
-	LogLine &operator<<(const T &thing){
-		if (setMsgLvl_ <= logLvl_){
+	LogLine<logLvl_> & operator<<(const T & thing) {
+		if (setMsgLvl_ <= logLvl_) {
 			outStream_ << thing;
 			return *this;
-		}
-		else{
+		} else {
 			return *this;
 		}
 	}
+
 	// logger << std::endl;
-	LogLine &operator<<(std::ostream &(*f)(std::ostream &)){
-		if (setMsgLvl_ <= logLvl_){
+	LogLine<logLvl_> & operator<<(std::ostream &(*f)(std::ostream &)){
+		if (setMsgLvl_ <= logLvl_) {
 			f(outStream_);
 			return *this;
-		}
-		else{
+		} else {
 			return *this;
 		}
 	}
@@ -124,3 +101,5 @@ private:
 // gm::LogLine<gm::LogLvl::Warn> logger(std::clog);
 
 } // namespace gm
+
+// std::ostream &operator<<(std::ostream &out, const gm::LogLvl &value);
