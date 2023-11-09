@@ -127,16 +127,15 @@ namespace gm {
 			using size_type					= size_t;
 
 			// Vec<> support
-			// TODO Vec access
 			using value_typeV 				= Vec<T>;
-			// using referenceV					= T &;
-			// using const_referenceV			= const T &;
-			// using pointerV						= T *;
-			// using const_pointerV				= const T *;
-			// using iteratorV						= T *;
-			// using const_iteratorV				= const T *;
-			// using reverse_iteratorV			= std::reverse_iterator<iterator>;
-			// using const_reverse_iteratorV	= std::reverse_iterator<const_iterator>;
+			using referenceV					= Vec<T> &;
+			using const_referenceV			= const Vec<T> &;
+			using pointerV						= Vec<T> *;
+			using const_pointerV				= const Vec<T> *;
+			using iteratorV					= Vec<T> *;
+			using const_iteratorV			= const Vec<T> *;
+			using reverse_iteratorV			= std::reverse_iterator<iteratorV>;
+			using const_reverse_iteratorV	= std::reverse_iterator<const_iteratorV>;
 
 			// 23.3.11.2, construct/copy/destroy:
 			vector() noexcept;
